@@ -6,4 +6,5 @@ The idea to build a digital thermometer itself, I got from many different projec
 Most of the projects based on a RPI which I see as oversized for this simple task.
 That's why I started to experiment with an ESP8266.
 
-<img src="https://github.com/MarcoH2013/ESPThermo/blob/master/images/Schaltung20160807.PNG"/>
+<img src="https://github.com/MarcoH2013/ESPThermo/blob/master/images/Schaltung20160807.PNG" />
+<img src="https://github.com/MarcoH2013/ESPThermo/blob/master/images/Platine20160807.PNG" />
