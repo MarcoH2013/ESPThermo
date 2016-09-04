@@ -13,8 +13,6 @@
 #include <Adafruit_SSD1306.h>   // https://github.com/adafruit/Adafruit_SSD1306
 
 #include <PubSubClient.h>       // https://github.com/knolleary/pubsubclient
-//#include "Adafruit_MQTT.h"      // https://github.com/adafruit/Adafruit_MQTT_Library
-//#include "Adafruit_MQTT_Client.h" // https://github.com/adafruit/Adafruit_MQTT_Library
 
 // declare MCP3208 on PIN 16
 MCP3208 adc(16);
@@ -23,7 +21,7 @@ MCP3208 adc(16);
 SimpleTimer timer;
 
 // declare temperature array
-float temperature[8] = {0,0,0,0,0,0,0,0};
+float temperature[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 // declare display
 #define OLED_RESET -1
@@ -38,75 +36,52 @@ WiFiClient espclient;
 // or... use WiFiFlientSecure for SSL
 //WiFiClientSecure client;
 
-//char mqtt_server[40] = "192.168.178.41";
-//uint16_t mqtt_port = 1883;
-IPAddress server(192, 168, 178, 41);
+// declare MQTT
+char MQTT_Server[40] = "nibbler.fritz.box";
+uint16_t MQTT_Port = 1883;
 char topic[] = "/ESPThermo";
 
 PubSubClient client(espclient);
-//PubSubClient client(server, 1883, callback, espclient);
-
-long lastMsg = 0;
-char msg[50];
-int value = 0;
-
 
 /////////////////////////////////////////////////////////////////////////
 ///// Calculate Temperature value based on reading //////////////////////
 /////////////////////////////////////////////////////////////////////////
-float calcT(uint16_t r, uint16_t typ){
-  float Rt = 0;
-  float Rmess = 47;
-  float v = 0;
-  float erg = 0;
-  float a = 0.00334519;
-  float b = 0.000243825;
-  float c = 0.00000261726;
-  float Rn = 47;
+float calcT(uint32_t r, uint32_t typ){
 
-  if (typ==1){ // Maverik
-    Rn = 1000;
-    a = 0.003358;
-    b = 0.0002242;
-    c = 0.00000261;
-  }else if (typ==2){ // Fantast-Neu
-    Rn = 47;
-    a = 0.00334519;
-    b = 0.000243825;
-    c = 0.00000261726;
-  }else if (typ==4){ // NTC 5k
-    Rn = 5;
-    a = 0.00335389;
-    b = 0.00025756;
-    c = 0.0000025024;
+  float Rmess = 47;
+  float a, b, c, Rn;
+
+  switch (typ) {
+  case 1: { // Maverik
+    Rn = 1000; a = 0.003358; b = 0.0002242; c = 0.00000261;
+    break; }
+  case 2: { // Fantast-Neu
+    Rn = 220; a = 0.00334519; b = 0.000243825; c = 0.00000261726;
+    break; }
+  case 3: { // NTC 100K6A1B (lila Kopf)
+    Rn = 100; a = 0.00335639; b = 0.000241116; c = 0.00000243362;
+    break; }
+  case 4: { // NTC 100K (braun/schwarz/gelb/gold)
+    Rn = 100; a = 0.003354016; b = 0.0002460380; c = 0.00000340538;
+    break; }
+  default: { // NTC 5K3A1B (orange Kopf)
+    Rn = 5; a = 0.0033555; b = 0.0002570; c = 0.00000243; }
   }
 
-  Rt = Rmess*((4096.0/(4096-r)) - 1);
-  v = log(Rt/Rn);
-  erg = (1/(a + b*v + c*v*v)) - 273;
+  float Rt = Rmess*((4096.0/(4096-r)) - 1);
+  float v = log(Rt/Rn);
+  float erg = (1/(a + b*v + c*v*v)) - 273;
   return (erg>-10)?erg:0x00;
 }
 
-void shortReading() {
-  display.clearDisplay();
-  display.setCursor(0,0);
+void readingTemperature() {
   for (int i = 0; i < 8; i++) {
-    uint16_t reading = adc.analogRead(i);
+    temperature[i] = calcT(adc.analogRead(i), 2);
 
-    temperature[i] = calcT(reading, 2);
-
-    //Serial.print(temp);
     Serial.print(temperature[i]);
     Serial.print(";");
 
-    // text display tests
-    display.print("Temperature ");
-    display.print(i);
-    display.print(": ");
-    display.print(temperature[i]);
-    display.println("C");
   }
-  display.display();
   Serial.println();
 }
 
@@ -127,18 +102,34 @@ void configModeCallback (WiFiManager *myWiFiManager) {
   display.display();
 }
 
-void sendingPhotocell() {
+void sendingTemperatureMQTT() {
   // Now we can publish stuff!
-  Serial.println(client.state());
   if (client.connected()) {
-    //char* topic = "";
     for (int i = 0; i < 8; i++) {
-      sprintf(topic, "/ESPThermo/%i", i);
+      sprintf(topic, "/ESPThermo/%i/%i", ESP.getChipId(), i);
       char value[] = "";
       dtostrf(temperature[i], 7, 2, value);
       client.publish(topic, value);
     }
   }
+}
+
+void sendingTemperatureDisplay() {
+  display.clearDisplay();
+  display.setCursor(0,0);
+
+  for (int i = 0; i < 8; i++) {
+    // text display tests
+    char line[] = "";
+    //sprintf(line, "Temperature %i: %.2f C", i, temperature[i]);
+    //display.println(line);
+    display.print("Temperature ");
+    display.print(i);
+    display.print(": ");
+    display.print(temperature[i]);
+    display.println("C");
+  }
+  display.display();
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -157,7 +148,7 @@ void reconnect() {
     Serial.print("Attempting MQTT connection...");
     // Create a random client ID
     String clientId = "ESPThermo-";
-    clientId += String(random(0xffff), HEX);
+    clientId += String(ESP.getChipId());
     // Attempt to connect
     if (client.connect(clientId.c_str())) {
       Serial.println("connected");
@@ -195,6 +186,7 @@ void setup() {
 
     //Local intialization. Once its business is done, there is no need to keep it around
     WiFiManager wifiManager;
+
     //reset saved settings
     //wifiManager.resetSettings();
     wifiManager.setDebugOutput(true);
@@ -204,13 +196,14 @@ void setup() {
 
     display.clearDisplay();
     display.println("Connected!");
-    //display.println(mqtt_server);
-    //display.println(mqtt_port);
+    display.println(MQTT_Server);
+    display.println(MQTT_Port);
     display.display();
     delay(2000);
     display.clearDisplay();
 
-    client.setServer(server, 1883);
+    // initialize MQTT
+    client.setServer(MQTT_Server, MQTT_Port);
     client.setCallback(callback);
 
     //if you get here you have connected to the WiFi
@@ -219,8 +212,9 @@ void setup() {
     // initialize MCP3208
     adc.begin();
 
-    timer.setInterval(1000, shortReading);     // Temperaturen
-    timer.setInterval(1000, sendingPhotocell);     // MQTT
+    timer.setInterval(1000, readingTemperature);     // ReadTemperature
+    timer.setInterval(1000, sendingTemperatureMQTT);     // MQTT
+    timer.setInterval(1000, sendingTemperatureDisplay);     // Display
 }
 
 void loop() {
