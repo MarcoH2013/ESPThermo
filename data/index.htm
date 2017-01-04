@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+    <head>
+        <title>ESP Thermo</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+		<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+		<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+        <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jquerymobile/1.4.5/jquery.mobile.min.css">
+		<script src="https://ajax.googleapis.com/ajax/libs/jquerymobile/1.4.5/jquery.mobile.min.js"></script>
+    </head>
+
+	<script>
+    setInterval(function() {
+      $.getJSON("/data", function(result){
+        $.each(result, function(i, field){
+          $("#Temperature0").html(field[0]);
+          $("#Temperature1").html(field[1]);
+          $("#Temperature2").html(field[2]);
+          $("#Temperature3").html(field[3]);
+        });
+      });
+    }, 1000);
+  </script>
+
+  <body>
+      <div data-role="page" id="page1">
+			<div data-role="header">
+				<h1>ESP Thermo</h1>
+			</div>
+			<div data-role="content">
+        <div>Temperature 0:
+    		    <div id="Temperature0"></div>
+        </div>
+        <div>Temperature 1:
+    		    <div id="Temperature1"></div>
+        </div>
+        <div>Temperature 2:
+    		    <div id="Temperature2"></div>
+        </div>
+        <div>Temperature 3:
+    		    <div id="Temperature3"></div>
+        </div>
+		</div>
+  </body>
+</html>
